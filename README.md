@@ -433,3 +433,7 @@ postgres=> SELECT * FROM bytes;
 ## Join de tablas
 
 ![](/images/join-ide.png)
+
+## Avro/Parquet Viewer
+
+![](/images/parquet-visual.png)
