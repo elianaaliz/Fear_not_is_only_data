@@ -20,7 +20,7 @@ object UserStreamingJob extends StreamingJob{
 
   import spark.implicits._
 
-// metodo intocable
+
   override def readFromKafka(kafkaServer: String, topic: String): DataFrame = {
     spark
       .readStream
@@ -29,7 +29,7 @@ object UserStreamingJob extends StreamingJob{
       .option("subscribe", topic)
       .load()
   }
-// cambiar la estructura json
+
   override def parserJsonData(dataFrame: DataFrame): DataFrame = {
     val struct = StructType(Seq(
       StructField("bytes", LongType, nullable = false),
@@ -44,17 +44,6 @@ object UserStreamingJob extends StreamingJob{
       .select($"value.*")
 
   }
-// intocable cambiar nombre antenna por user
-  /*override def readUserMetadata(jdbcURI: String, jdbcTable: String, user: String, password: String): DataFrame = {
-    spark
-      .read
-      .format("jdbc")
-      .option("url", jdbcURI)
-      .option("dbtable", jdbcTable)
-      .option("user", user)
-      .option("password", password)
-      .load()
-  }*/
 
   def totalBytesByAntenna(dataFrame: DataFrame): DataFrame = {
     dataFrame
@@ -108,8 +97,8 @@ object UserStreamingJob extends StreamingJob{
       .start()
       .awaitTermination()
   }
-// esto es escribir en local
-  // en principio es para simular que se guarda en postgres y local en paralelo- pero va ser que no
+  
+  // esto es escribir en localstorage
   override def writeToStorage(dataFrame: DataFrame, storageRootPath: String): Future[Unit] = Future {
 
 
@@ -125,65 +114,6 @@ object UserStreamingJob extends StreamingJob{
       .option("checkpointLocation", "/tmp/spark-checkpoint")
       .start()
       .awaitTermination()
-  }
-
-  def main2(args: Array[String]): Unit = {
-/*
-    totalBytesbyUser(
-      parserJsonData(
-        readFromKafka("35.193.101.232:9092","devices")))
-      .writeStream
-      .format("console")
-      .start()
-      .awaitTermination()*/
-
-    // creo que esto no es necesario para el proyecto -- sirve para probar si recibimos de postgres
-    /*
-    val metadata_user = readUserMetadata(s"jdbc:postgresql://34.134.76.186:5432/postgres",
-      "user_metadata",
-      "postgres",
-      "keepcoding"
-    )//.show()*/
-
-
-/*
-    val future1 = writeToJdbc(
-      totalBytesbyAntenna(
-       parserJsonData(
-        readFromKafka("35.202.44.187:9092","devices"))),
-      s"jdbc:postgresql://34.134.76.186:5432/postgres",
-      "bytes",
-      "postgres",
-      "keepcoding")
-*/
-    /*
-    val future2 = writeToJdbc(
-      totalBytesbyUser(
-        parserJsonData(
-          readFromKafka("35.202.44.187:9092","devices"))),
-      s"jdbc:postgresql://34.134.76.186:5432/postgres",
-      "bytes",
-      "postgres",
-      "keepcoding")
-*/
-
-
-/*
-    val future3 = writeToJdbc(
-      totalBytesbyApp(
-        parserJsonData(
-          readFromKafka("35.202.44.187:9092","devices"))),
-      s"jdbc:postgresql://34.134.76.186:5432/postgres",
-      "bytes",
-      "postgres",
-      "keepcoding")
-
-*/
-
-    val future4 = writeToStorage(parserJsonData(readFromKafka("35.202.44.187:9092", "devices")), "/tmp/data-spark2")
-    Await.result(Future.sequence(Seq(future4)), Duration.Inf)
-    // descomentar este ultimo para entrega solo - ya que es una lista de futuros
-    //Await.result(Future.sequence(Seq(future1, future2, future3, future4)), Duration.Inf)
   }
 
   def main(args: Array[String]): Unit = run(args)
