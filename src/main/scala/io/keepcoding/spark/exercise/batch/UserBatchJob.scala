@@ -48,9 +48,9 @@ object UserBatchJob extends BatchJob {
       .load()
   }
 
-// creo que esto tendre que cambiar , pero lo necesitare para combinar tablas e informacio del kafka**
+
   override def enrichUserWithMetadata(antennaDF: DataFrame, metadataDF: DataFrame): DataFrame = {
-    antennaDF.as("devices")  // devices seria lo que pone en main*
+    antennaDF.as("devices")  
       .join(
         metadataDF.as("user_metadata"),
         $"devices.id" === $"user_metadata.id"
@@ -62,7 +62,7 @@ object UserBatchJob extends BatchJob {
 
   def totalBytesByAntenna(dataFrame: DataFrame): DataFrame = {
     dataFrame
-      .groupBy($"antenna_id", window($"timestamp", "1 hour")) //cambiarlo 1h
+      .groupBy($"antenna_id", window($"timestamp", "1 hour")) 
       .agg(
         sum("bytes").as("value")
       )
@@ -71,9 +71,7 @@ object UserBatchJob extends BatchJob {
   }
 
   // Total de bytes transmitidos por mail de usuario.
-  // aqui creo que necesitare hacer un join de lo que pasa kafka y la base de datos o solo bbdd??
-
-  // LE HE AGREADO EL ID DE USUARIO AL RPINCIPIO
+  
   def totalBytesByMail(dataFrame: DataFrame): DataFrame = {
     dataFrame
       .groupBy($"email", window($"timestamp", "1 hour"))
@@ -123,7 +121,7 @@ object UserBatchJob extends BatchJob {
 
   }
 
-    // intocable
+  
   override def writeToJdbc(dataFrame: DataFrame, jdbcURI: String, jdbcTable: String, user: String, password: String): Unit = {
     dataFrame
       .write
@@ -137,7 +135,7 @@ object UserBatchJob extends BatchJob {
       .save()
   }
 
-  //// intocable
+  
   override def writeToStorage(dataFrame: DataFrame, storageRootPath: String): Unit = {
     dataFrame
       .write
@@ -145,82 +143,6 @@ object UserBatchJob extends BatchJob {
       .format("parquet")
       .mode(SaveMode.Overwrite)
       .save(s"${storageRootPath}/historical")
-  }
-
-  def main2(args: Array[String]): Unit ={
-
-    // devices = readFromStorage("tmp/data-spark") viene de este
-
-    val rawdf = readFromStorage("/tmp/data-spark2", OffsetDateTime.parse("2022-02-24T17:00:00Z"))
-    //rawdf.show()
-    //Thread.sleep(10000)
-
-    // Para leer de la base de datos antes de hacer el join de ambos
-    val userMetadata = readUserMetadata(s"jdbc:postgresql://34.134.76.186:5432/postgres",
-      "user_metadata",
-      "postgres",
-      "keepcoding"
-    )
-
-    val bytesMetadata = readUserMetadata(s"jdbc:postgresql://34.134.76.186:5432/postgres",
-      "bytes_hourly",
-      "postgres",
-      "keepcoding"
-    )
-
-
-    val enrichDF = enrichUserWithMetadata(rawdf, userMetadata).cache() // aqui en este caso con nuestro proyecto
-
-    //enrichDF.show()
-    //Thread.sleep(10000)
-
-
-    //val pruebadf = prueba1(metadataDF2)
-
-    //pruebadf.show()
-
-    //Thread.sleep(10000)
-
-    //val uno = totalBytesMailperUser(enrichDF)
-    //uno.show()
-    //Thread.sleep(10000)
-
-    //uso de las dos BBDD user_metadata y bytes_hourly
-    val chungo = userQuotaLimit(bytesMetadata, userMetadata)
-    chungo.show()
-
-    Thread.sleep(10000)
-
-    //xxxxxxxxxxxxxxxxxxxxxxxxxxx
-    // para verificar mas dejar que kafka guarde mas en el parquet .. para q tenga mas datos
-    //seguiria lo siguiente
-    /*writeToJdbc(totalBytesMailperUser(enrichDF),
-      s"jdbc:postgresql://34.134.76.186:5432/postgres",
-      "bytes_hourly",
-      "postgres",
-      "keepcoding")*/
-
-    //totalBytesbyApp
-
-    /*
-    writeToJdbc(totalBytesbyApp(enrichDF),
-      s"jdbc:postgresql://34.134.76.186:5432/postgres",
-      "bytes_hourly",
-      "postgres",
-      "keepcoding")
-
-
-     */
-
-    /*
-    writeToJdbc(totalBytesbyAntenna(enrichDF),
-      s"jdbc:postgresql://34.134.76.186:5432/postgres",
-      "bytes_hourly",
-      "postgres",
-      "keepcoding")
-    Thread.sleep(10000)
-    */
-
   }
 
   def main(args: Array[String]): Unit = run(args)
