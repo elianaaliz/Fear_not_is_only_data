@@ -5,8 +5,8 @@ El proyecto final se contruye siguiendo la arquitectura lambda para el procesami
 
 ## Arquitectura lambda
 
-- Speed Layer: Capa de procesamiento en streaming. Computa resultados en tiempo real y baja latencia.
-- Batch Layer: Capa de procesamiento por lotes. Computa resultados usando grande cantidades de datos, alta latencia.
+- Speed Layer: Capa de procesamiento en streaming, el cual computa resultados en tiempo real y baja latencia.
+- Batch Layer: Capa de procesamiento por lotes se encarga de computar resultados usando grande cantidades de datos, alta latencia.
 - Serving Layer: Capa encargada de servir los datos, es nutrida por las dos capas anteriores.
 
 ## Fuente de Datos
@@ -68,7 +68,7 @@ En nuestra arquitectura lambda vamos a hacer distintos procesamientos, con la fi
 
 En primer lugar se crea y configura nuestro sistema de speed layer, para ellos vamos a crear una instancia en google compute engine, y vamos a configurarla para poder hacer funcionar un broker de Apache Kafka, donde se recibirán los mensajes en tiempo real de las fuentes datos móviles y BBDD de usuarios.
 
-Ahora que ya tenemos los datos en Kafka, es el momento de crear nuestro job de Spark Structured Streaming para conseguir lás métricas y almacenar el histórico de datos.
+Con los datos en Kafka, es el momento de crear nuestro job de Spark Structured Streaming para conseguir lás métricas y almacenar el histórico de datos.
 
 Se ejecuta el job de spark dentro de DataProc/Local e indicar por argumento:
 * La dirección del broker de kafka, es decir la dirección IP pública de nuestra instancía.
@@ -121,6 +121,10 @@ Hay que crear la tabla en postgresql antes de ejecutar el job de structuredStrea
 ## Resolviendo las Métricas
 
 ### Total de bytes recibidos por antena
+
+Esta función se encarga de obtener el total de bytes por antena en 5 minutos(Para la realizar los test, se ha usado un tiempo menor como se representa a continuación).
+Por ello, para empezar agrupamos por el identificador principal de antena, continuamos con la agregación de la suma de bytes. Finalmente, se selecciona los datos que nos interesan como también se agrega una columna más para la distinción del tipo calculado, en este caso: antenna_bytes_total.
+
 ```scala
 def totalBytesByAntenna(dataFrame: DataFrame): DataFrame = {
     dataFrame
@@ -135,6 +139,10 @@ def totalBytesByAntenna(dataFrame: DataFrame): DataFrame = {
 ````
 
 ### Total de bytes transmitidos por id de usuario
+
+Esta función se encarga de obtener el total de bytes por usuario en 5 minutos(Para la realizar los test, se ha usado un tiempo menor como se representa a continuación).
+Por ello, para empezar agrupamos por el identificador de usuarios, continuamos con la agregación de la suma de bytes. Finalmente, se selecciona los datos que nos interesan como también se agrega una columna más para la distinción del tipo calculado, en este caso: id_bytes_total.
+
 ```scala
 def totalBytesByUser(dataFrame: DataFrame): DataFrame = {
     dataFrame
@@ -149,6 +157,10 @@ def totalBytesByUser(dataFrame: DataFrame): DataFrame = {
 ````
 
 ### Total de bytes transmitidos por aplicación
+
+Esta función se encarga de obtener el total de bytes por aplicación en 5 minutos(Para la realizar los test, se ha usado un tiempo menor como se representa a continuación).
+Por ello, para empezar agrupamos por el identificador de aplicación , continuamos con la agregación de la suma de bytes. Finalmente, se selecciona los datos que nos interesan como también se agrega una columna más para la distinción del tipo calculado, en este caso: app_bytes_total.
+
 ```scala
 def totalBytesByApp(dataFrame: DataFrame): DataFrame = {
     dataFrame
@@ -162,7 +174,7 @@ def totalBytesByApp(dataFrame: DataFrame): DataFrame = {
   }
 ````
 
-Podemos modelar todas las métricas agregadas de bytes se guardarán en una tabla como la siguiente:
+Podemos modelar todas las métricas calculadas de bytes se guardarán en una tabla cconjunta para las 3 como la siguiente:
 ```sql
 CREATE TABLE bytes(timestamp TIMESTAMP, id TEXT, value BIGINT, type TEXT);
 ```
@@ -178,7 +190,7 @@ Este formato de tabla, nos permite guardar todas las métricas resultantes del j
 
 ## Batch Layer
 
-En esta capa vamos trabajar con los datos que el job de structuredStreaming va creando en el storage. El job de batch (sparkSQL) deberá cargar estos datos filtrando por hora y calcular las métricas que hemos visto anteriormente:
+En esta capa vamos trabajar con los datos que el job de structuredStreaming va creando en el storage. El job de batch (sparkSQL) deberá cargar estos datos filtrando por hora y calcular métricas similares a lo visto anteriormente y algunas más:
 
 ### Un servicio de analíticas de clientes.
 * Total de bytes recibidos por antena.
@@ -188,16 +200,12 @@ En esta capa vamos trabajar con los datos que el job de structuredStreaming va c
 
 Todas las métricas serán almacenadas en PostgreSQL.
 
-Para calcular estas métricas usara los datos volcados por el job de structured streaming y necesitara acceder a la tabla de metadatos de usuario para descubrir los emails y las quotas de los usuarios. Los resultado pueden volcarse en unas tablas mediante conexión jdbc, que pueden tener unos schema como los siguientes:
-
-```sql
-CREATE TABLE bytes_hourly(timestamp TIMESTAMP, id TEXT, value BIGINT, type TEXT);
-CREATE TABLE user_quota_limit(email TEXT, usage BIGINT, quota BIGINT, timestamp TIMESTAMP);
-```
-
 ## Resolviendo las Métricas
 
 ### Total de bytes recibidos por antena
+
+Esta función se encarga de obtener el total de bytes por antena en 1 hora.
+Por ello, para empezar agrupamos por el identificador principal de antena, continuamos con la agregación de la suma de bytes. Finalmente, se selecciona los datos que nos interesan como también se agrega una columna más para la distinción del tipo calculado, en este caso: antenna_bytes_total.
 
 ```scala
 def totalBytesByAntenna(dataFrame: DataFrame): DataFrame = {
@@ -213,6 +221,9 @@ def totalBytesByAntenna(dataFrame: DataFrame): DataFrame = {
 
 ### Total de bytes transmitidos por mail de usuario
 
+Esta función se encarga de obtener el total de bytes por mail de usuario en 1 hora.
+Por ello, para empezar agrupamos por mail de usuario , continuamos con la agregación de la suma de bytes. Finalmente, se selecciona los datos que nos interesan como también se agrega una columna más para la distinción del tipo calculado, en este caso: mail_bytes_total.
+
 ```scala
  def totalBytesByMail(dataFrame: DataFrame): DataFrame = {
     dataFrame
@@ -227,6 +238,9 @@ def totalBytesByAntenna(dataFrame: DataFrame): DataFrame = {
 
 ### Total de bytes transmitidos por aplicación
 
+Esta función se encarga de obtener el total de bytes por aplicación en 1 hora.
+Por ello, para empezar agrupamos por el identificador de aplicación , continuamos con la agregación de la suma de bytes. Finalmente, se selecciona los datos que nos interesan como también se agrega una columna más para la distinción del tipo calculado, en este caso: app_bytes_total.
+
 ```scala
  def totalBytesByApp(dataFrame: DataFrame): DataFrame = {
     dataFrame
@@ -240,6 +254,10 @@ def totalBytesByAntenna(dataFrame: DataFrame): DataFrame = {
   ```
 
 ### Email de usuarios que han sobrepasado la cuota por hora
+
+Esta función se encarga de obtener las cuantas de usuarios que han sobrepasado su respectiva quota en 1 hora.
+Como práctica personal, en este apartado he de usar las tablas de "bytes_hourly" y "user_metada", para la obtención de los datos. Para ello, para empezar selecionamos de la tabla "bytes_hourly" filtrando por el "type" = "mail_bytes_total" los campos: "timestamp", "id", "value". También, selecionamos de la tabla "user_metada" los campos: "id", "email", "quota".
+Se procede a realizar el join entre ambas tablas, teniendo en cuenta el id de bytes_hourly sea igual al campo "email" de user_metadata, también para no tener campos duplicados eliminamos alguno de los dos. Lo importante es que los bytes no hayan sobrepasado la quota máxima, para ello se realizará un filtro donde se indique que se quiere obtener "value > quota", para que finalmente, se selecciona los datos que nos interesan como "email", "usage"(bytes usados), "quota", "timestamp".
 
 ```scala
  def userQuotaLimit(dataFrameByte: DataFrame, dataFrameUser: DataFrame): DataFrame = {
@@ -276,6 +294,20 @@ CREATE TABLE bytes_hourly(timestamp TIMESTAMP, id TEXT, value BIGINT, type TEXT)
 CREATE TABLE user_quota_limit(email TEXT, usage BIGINT, quota BIGINT, timestamp TIMESTAMP);
 ```
 
+## Otros métodos que se han implementado
+
+Tanto para la parte de streaming y batch, se han desarrollado otros métodos que son importantes, a continuación se describe su funcionamiento:
+
+- readFromKafka: Se encarga de consumir desde un topico de Kafka y con ello se genera el dataframe con el cual trabajar.
+- parserJsonData: Su finalidad es la conversión a tipo JSON de los datos que lee desde un topico de Kafka.
+- writeToJdbc: Se encargará de guardar las métricas en la base de datos.
+- writeToStorage: Se encargará de almacenar la información que nos llega sin procesarla, seprandolo por año, mes, dia y hora.Con el fin de un posterior uso.
+- readFromStorage: Realizará la correspondiente lectura de los datos almacenados en el sistema de ficheros.
+- readUserMetadata: Realiza la lectura de los datos de la tabla de user_metadata.
+- readBytesMetadata: Realiza la lectura de los datos de la tabla de bytes_hourly.
+- enrichUserWithMetadata: Se encargará se unir los 2 BBDDs mediante el id de usuario(almacenada en el storage y el otro de BBDD), eliminamos duplicados.
+
+
 # (*)Parte opcional
 ## Serving Layer
 
@@ -286,12 +318,118 @@ Una vez tenemos todos los datos en nuestra capa de servicios (PostgreSQL), podem
 Por ejemplo, a continuación se adjuntará dos capturas de imágenes de las consultas:
 
 ### Total de bytes transmitidos por aplicación
+![](/images/superset_app.jpg)
+
+### Email de usuarios que han sobrepasado la cuota (limitado a 5)
+![](/images/superset_email.jpg)
 
 
-### Email de usuarios que han sobrepasado la cuota (limitado a 10)
+### Más capturas:
+## Base de datos: user_quota_limit
 
-![](../images/superset_create.png)
-![](../images/superset_graph.png)
+```sql
+postgres=> SELECT * FROM user_quota_limit;
+        email        |  usage  |  quota  |      timestamp
+---------------------+---------+---------+---------------------
+ andres@gmail.com    |  304990 |  200000 | 2022-02-26 14:00:00
+ paco@gmail.com      |  305678 |  300000 | 2022-02-26 14:00:00
+ juan@gmail.com      |  199807 |  100000 | 2022-02-26 14:00:00
+ fede@gmail.com      |   67980 |    5000 | 2022-02-26 14:00:00
+ gorka@gmail.com     |  209234 |  200000 | 2022-02-26 14:00:00
+ luis@gmail.com      |  212300 |  200000 | 2022-02-26 14:00:00
+ eric@gmail.com      |  311098 |  300000 | 2022-02-26 14:00:00
+ carlos@gmail.com    |  103982 |  100000 | 2022-02-26 14:00:00
+ david@gmail.com     |  399023 |  300000 | 2022-02-26 14:00:00
+ juanchu@gmail.com   |  330232 |  300000 | 2022-02-26 14:00:00
+ charo@gmail.com     |  321022 |  300000 | 2022-02-26 14:00:00
+ delicidas@gmail.com | 1005334 | 1000000 | 2022-02-26 14:00:00
+ milagros@gmail.com  |  233008 |  200000 | 2022-02-26 14:00:00
+ antonio@gmail.com   | 1220909 | 1000000 | 2022-02-26 14:00:00
+ sergio@gmail.com    | 1010349 | 1000000 | 2022-02-26 14:00:00
+ maria@gmail.com     | 2000123 | 1000000 | 2022-02-26 14:00:00
+ cristina@gmail.com  |  314009 |  300000 | 2022-02-26 14:00:00
+ lucia@gmail.com     |  380277 |  300000 | 2022-02-26 14:00:00
+ carlota@gmail.com   |  202769 |  200000 | 2022-02-26 14:00:00
+ emilio@gmail.com    |  217332 |  200000 | 2022-02-26 14:00:00
+(20 rows)
+```
+## Base de datos: bytes_hourly
 
+```sql
+postgres=> SELECT * FROM bytes_hourly
+;
+      timestamp      |                  id                  | value  |        type
+---------------------+--------------------------------------+--------+---------------------
+ 2022-02-24 17:00:00 | paco@gmail.com                       |  14518 | mail_bytes_total
+ 2022-02-24 17:00:00 | charo@gmail.com                      |  18993 | mail_bytes_total
+ 2022-02-24 17:00:00 | juan@gmail.com                       |  12662 | mail_bytes_total
+ 2022-02-24 17:00:00 | antonio@gmail.com                    |  19488 | mail_bytes_total
+ 2022-02-24 17:00:00 | sergio@gmail.com                     |  20237 | mail_bytes_total
+ 2022-02-24 17:00:00 | delicidas@gmail.com                  |  13924 | mail_bytes_total
+ 2022-02-24 17:00:00 | luis@gmail.com                       |  16412 | mail_bytes_total
+ 2022-02-24 17:00:00 | juanchu@gmail.com                    |  11098 | mail_bytes_total
+ 2022-02-24 17:00:00 | carlos@gmail.com                     |  16291 | mail_bytes_total
+ 2022-02-24 17:00:00 | andres@gmail.com                     |  24166 | mail_bytes_total
+ 2022-02-24 17:00:00 | emilio@gmail.com                     |  17382 | mail_bytes_total
+ 2022-02-24 17:00:00 | milagros@gmail.com                   |  23496 | mail_bytes_total
+ 2022-02-24 17:00:00 | fede@gmail.com                       |  11130 | mail_bytes_total
+ 2022-02-24 17:00:00 | carlota@gmail.com                    |   8081 | mail_bytes_total
+ 2022-02-24 17:00:00 | gorka@gmail.com                      |  16737 | mail_bytes_total
+ 2022-02-24 17:00:00 | david@gmail.com                      |  10793 | mail_bytes_total
+ 2022-02-24 17:00:00 | eric@gmail.com                       |  12117 | mail_bytes_total
+ 2022-02-24 17:00:00 | maria@gmail.com                      |  11271 | mail_bytes_total
+ 2022-02-24 17:00:00 | cristina@gmail.com                   |  16786 | mail_bytes_total
+ 2022-02-24 17:00:00 | lucia@gmail.com                      |  10551 | mail_bytes_total
+ 2022-02-24 17:00:00 | SKYPE                                |  61560 | app_bytes_total
+ 2022-02-24 17:00:00 | FACETIME                             |  73238 | app_bytes_total
+ 2022-02-24 17:00:00 | FACEBOOK                             |  94068 | app_bytes_total
+ 2022-02-24 17:00:00 | TELEGRAM                             |  77267 | app_bytes_total
+ 2022-02-24 17:00:00 | 00000000-0000-0000-0000-000000000000 | 145924 | antenna_bytes_total
+ 2022-02-24 17:00:00 | 22222222-2222-2222-2222-222222222222 |  64071 | antenna_bytes_total
+ 2022-02-24 17:00:00 | 11111111-1111-1111-1111-111111111111 |  96138 | antenna_bytes_total
+(27 rows)
+```
 
--------------------------------------
+![](/images/byteshour.png)
+
+## Base de datos: bytes
+
+```sql
+postgres=> SELECT * FROM bytes;
+      timestamp      |                  id                  | value |        type
+---------------------+--------------------------------------+-------+---------------------
+ 2022-02-24 17:02:00 | 00000000-0000-0000-0000-000000000000 | 50375 | antenna_bytes_total
+ 2022-02-24 17:02:00 | 22222222-2222-2222-2222-222222222222 | 62829 | antenna_bytes_total
+ 2022-02-24 17:02:00 | 44444444-4444-4444-4444-444444444444 | 45213 | antenna_bytes_total
+ 2022-02-24 17:02:00 | 11111111-1111-1111-1111-111111111111 | 20418 | antenna_bytes_total
+ 2022-02-24 17:06:00 | FACETIME                             | 63514 | app_bytes_total
+ 2022-02-24 17:06:00 | FACEBOOK                             | 66704 | app_bytes_total
+ 2022-02-24 17:06:00 | TELEGRAM                             | 28726 | app_bytes_total
+ 2022-02-24 17:06:00 | SKYPE                                | 31954 | app_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000013 |  6931 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000017 |  9560 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000002 |  9837 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000019 |  2400 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000016 |  4045 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000009 |  7772 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000003 |  3957 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000007 | 15049 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000005 |  6469 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000010 | 10643 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000012 |  7415 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000015 | 14924 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000011 |  5425 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000004 |  7194 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000006 | 17837 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000001 | 14996 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000014 |  2716 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000018 | 12962 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000008 |  4103 | id_bytes_total
+ 2022-02-24 17:09:00 | 00000000-0000-0000-0000-000000000020 | 14826 | id_bytes_total
+(28 rows)
+```
+![](/images/bytes.png)
+
+## Join de tablas
+
+![](/images/join-ide.png)
